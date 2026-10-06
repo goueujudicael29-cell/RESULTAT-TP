@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mini tableau de bord réseau</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,800&family=Figtree:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #E9EDF5; --surface: #fff; --ink: #0E1726; --muted: #5B667A; --line: #E3E7EF; --accent: #2D4BFF;
+    --ok: #0B7A43; --warn: #A35F00; --off: #C5221F;
+    --title: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font: 400 1.05rem/1.5 "Figtree", "Segoe UI", system-ui, sans-serif;
+    padding: clamp(18px, 5vw, 64px);
+  }
+  main { max-width: 62rem; margin: 0 auto; display: grid; gap: 1.5rem; }
+  .ok { --c: var(--ok); } .warn { --c: var(--warn); } .off { --c: var(--off); }
+
+  header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 1rem; }
+  h1 { font: 800 clamp(1.8rem, 5vw, 2.8rem)/1.05 var(--title); letter-spacing: -.025em; }
+  .sub { color: var(--muted); margin-top: .3rem; }
+  .live { background: var(--surface); border-radius: 999px; padding: .35rem 1rem; font-size: .85rem; font-weight: 600; box-shadow: 0 1px 2px rgba(14,23,38,.08); }
+  .live::before { content: ""; display: inline-block; width: .55rem; height: .55rem; border-radius: 50%; background: var(--accent); margin-right: .5rem; }
+
+  .stats { display: flex; flex-wrap: wrap; gap: 1.2rem 0; }
+  .stats > div { padding: 0 clamp(16px, 4vw, 48px); border-left: 2px solid rgba(14,23,38,.15); }
+  .stats > div:first-child { padding-left: 0; border: 0; }
+  .num { font: 800 clamp(2.4rem, 7vw, 4rem)/1 var(--title); letter-spacing: -.03em; }
+  .num small { font-size: .45em; font-weight: 500; color: var(--muted); }
+  .label { color: var(--muted); font-size: .9rem; }
+
+  .panel { border-radius: 22px; overflow: hidden; }
+  .topo {
+    background: radial-gradient(120% 90% at 50% 0%, #1A2A4A 0%, #0E1726 70%);
+    color: #fff; padding: clamp(16px, 3vw, 32px);
+    --ok: #34D399; --warn: #FFB020; --off: #FF6B5E;
+  }
+  .topo svg { display: block; width: 100%; height: auto; max-height: 420px; }
+  .link { stroke: rgba(255,255,255,.22); stroke-width: 2; }
+  .link.warn { stroke: var(--warn); } .link.off { stroke: var(--off); stroke-dasharray: 6 6; }
+  .ring { fill: #16233A; stroke: var(--c); stroke-width: 3; }
+  .dot { fill: var(--c); }
+  .pulse { fill: none; stroke: var(--c); stroke-width: 2; transform-box: fill-box; transform-origin: center; animation: ping 2s ease-out infinite; }
+  .node.ok .pulse { display: none; }
+  @keyframes ping { from { transform: scale(1); opacity: .9; } to { transform: scale(2.1); opacity: 0; } }
+  .name { font: 600 15px "Figtree", system-ui, sans-serif; fill: #fff; }
+  .ms { font: 400 14px "Figtree", system-ui, sans-serif; fill: var(--c); }
+  .legend { display: flex; gap: 1.4rem; flex-wrap: wrap; margin-top: .6rem; font-size: .85rem; color: #B7C0D1; }
+  .legend span::before { content: ""; display: inline-block; width: .6rem; height: .6rem; border-radius: 50%; background: var(--c); margin-right: .45rem; }
+
+  .list { background: var(--surface); box-shadow: 0 1px 2px rgba(14,23,38,.08); padding: .5rem clamp(16px, 3vw, 32px); overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; min-width: 34rem; }
+  th, td { text-align: left; padding: 1rem .8rem 1rem 0; border-bottom: 1px solid var(--line); }
+  tbody tr:last-child td { border-bottom: 0; }
+  th { font-weight: 600; font-size: .85rem; color: var(--muted); }
+  td.ip { font-family: "Cascadia Code", Consolas, Menlo, monospace; font-size: .9rem; color: var(--muted); }
+  .pill { display: inline-block; font-weight: 600; font-size: .85rem; padding: .15rem .8rem; border-radius: 999px; color: var(--c); background: color-mix(in srgb, var(--c) 12%, white); }
+  .bar { width: 6rem; height: 6px; border-radius: 3px; background: var(--line); margin-top: .4rem; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--c); border-radius: 3px; }
+
+  footer { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; color: var(--muted); font-size: .9rem; }
+  button { font: inherit; font-weight: 600; cursor: pointer; color: #fff; background: var(--ink); border: 0; border-radius: 999px; padding: .5rem 1.4rem; }
+  button:hover { background: var(--accent); }
+  button:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+  @media (prefers-reduced-motion: reduce) { .pulse { animation: none; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <h1>Réseau du TP</h1>
+      <p class="sub">Équipements du réseau 192.168.1.0/24</p>
+    </div>
+    <div class="live" id="time">Simulation</div>
+  </header>
+
+  <section class="stats" aria-live="polite">
+    <div><div class="num" id="online"></div><div class="label">équipements en ligne</div></div>
+    <div><div class="num" id="latency"></div><div class="label">latence moyenne</div></div>
+    <div><div class="num" id="alerts"></div><div class="label">alertes</div></div>
+  </section>
+
+  <section class="panel topo">
+    <svg id="map" viewBox="0 0 600 350" role="img" aria-label="Schéma du réseau"></svg>
+    <div class="legend">
+      <span class="ok">En ligne</span><span class="warn">Dégradé</span><span class="off">Hors ligne</span>
+    </div>
+  </section>
+
+  <section class="panel list">
+    <table>
+      <thead><tr><th>Équipement</th><th>Type</th><th>Adresse IP</th><th>Statut</th><th>Latence</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </section>
+
+  <footer>
+    <span>Données simulées : une page web seule ne peut pas faire de ping.</span>
+    <button id="refresh" type="button">Actualiser</button>
+  </footer>
+</main>
+
+<script>
+  // Décrivez votre réseau ici. x, y : position sur le schéma. parent : index de l'équipement relié.
+  // latence = null : équipement hors ligne.
+  const devices = [
+    { nom: "Routeur principal", type: "Routeur",       ip: "192.168.1.1",  latence: 2,    x: 300, y: 50 },
+    { nom: "Switch étage 1",    type: "Switch",        ip: "192.168.1.2",  latence: 3,    x: 300, y: 150, parent: 0 },
+    { nom: "Serveur web",       type: "Serveur",       ip: "192.168.1.10", latence: 5,    x: 75,  y: 270, parent: 1 },
+    { nom: "Serveur fichiers",  type: "Serveur",       ip: "192.168.1.11", latence: 85,   x: 225, y: 270, parent: 1 },
+    { nom: "Borne Wi-Fi",       type: "Point d'accès", ip: "192.168.1.20", latence: 12,   x: 375, y: 270, parent: 1 },
+    { nom: "Imprimante",        type: "Imprimante",    ip: "192.168.1.30", latence: null, x: 525, y: 270, parent: 1 },
+  ];
+
+  const statut = (ms) =>
+    ms === null ? { txt: "Hors ligne", cls: "off" }
+    : ms > 80   ? { txt: "Dégradé",    cls: "warn" }
+    :             { txt: "En ligne",   cls: "ok" };
+
+  // Le schéma est construit une seule fois, puis seulement mis à jour.
+  const liens = devices.map((d, i) => d.parent === undefined ? "" :
+    `<line id="l${i}" class="link" x1="${devices[d.parent].x}" y1="${devices[d.parent].y}" x2="${d.x}" y2="${d.y}"/>`).join("");
+
+  const noeuds = devices.map((d, i) => {
+    const r = i < 2 ? 28 : 24, bas = i >= 2;
+    const x = bas ? d.x : d.x + r + 16, anchor = bas ? "middle" : "start";
+    const yNom = bas ? d.y + r + 22 : d.y - 2, yMs = bas ? d.y + r + 41 : d.y + 18;
+    return `<g id="g${i}" class="node">
+      <circle class="pulse" cx="${d.x}" cy="${d.y}" r="${r}"/>
+      <circle class="ring" cx="${d.x}" cy="${d.y}" r="${r}"/>
+      <circle class="dot" cx="${d.x}" cy="${d.y}" r="7"/>
+      <text class="name" x="${x}" y="${yNom}" text-anchor="${anchor}">${d.nom}</text>
+      <text class="ms" id="t${i}" x="${x}" y="${yMs}" text-anchor="${anchor}"></text>
+    </g>`;
+  }).join("");
+
+  document.getElementById("map").innerHTML = liens + noeuds;
+
+  function render() {
+    devices.forEach((d, i) => {
+      const s = statut(d.latence);
+      document.getElementById("g" + i).setAttribute("class", "node " + s.cls);
+      document.getElementById("t" + i).textContent = d.latence === null ? "hors ligne" : d.latence + " ms";
+      const l = document.getElementById("l" + i);
+      if (l) l.setAttribute("class", "link " + s.cls);
+    });
+
+    document.getElementById("rows").innerHTML = devices.map((d) => {
+      const s = statut(d.latence);
+      const pct = d.latence === null ? 0 : Math.min(100, (d.latence / 150) * 100);
+      return `<tr class="${s.cls}">
+        <td><strong>${d.nom}</strong></td><td>${d.type}</td><td class="ip">${d.ip}</td>
+        <td><span class="pill">${s.txt}</span></td>
+        <td>${d.latence === null ? "-" : d.latence + " ms"}<div class="bar"><i style="width:${pct}%"></i></div></td>
+      </tr>`;
+    }).join("");
+
+    const up = devices.filter((d) => d.latence !== null);
+    const moy = up.length ? Math.round(up.reduce((a, d) => a + d.latence, 0) / up.length) : 0;
+    const alertes = devices.filter((d) => statut(d.latence).cls !== "ok").length;
+    document.getElementById("online").innerHTML = `${up.length}<small> / ${devices.length}</small>`;
+    document.getElementById("latency").innerHTML = `${moy}<small> ms</small>`;
+    document.getElementById("alerts").textContent = alertes;
+    document.getElementById("time").textContent = "Simulation, " + new Date().toLocaleTimeString("fr-FR");
+  }
+
+  function simuler() {
+    devices.forEach((d) => {
+      if (d.latence !== null) d.latence = Math.max(1, Math.round(d.latence + (Math.random() - 0.5) * d.latence * 0.3));
+    });
+    render();
+  }
+
+  document.getElementById("refresh").onclick = simuler;
+  setInterval(simuler, 4000);
+  render();
+</script>
+</body>
+</html>
